@@ -1,10 +1,20 @@
 """
-This script will produce shot annotation on a tennis video.
-It will output a csv file containing frame id and shot name by pressing your key board keys
+This script will produce shot annotation on a padel video.
+It will output a csv file containing frame id, shot name and player who hit.
+If there are two players per field, use arrow keys for the left player and WASD keys for the right player. 
+If there is only one player, specify the --single_player flag and use either arrow keys or WASD keys to mark the shots.
+
+In particular:
+
 RIGHT_ARROW_KEY to mark a shot as FOREHAND
-LEFT_ARROW_KEY to mark a shot as BACKHAND
-UP_ARROW_KEY to mark a shot as SERVE
-We advise you to hit the key when the player hits the ball.
+ LEFT_ARROW_KEY to mark a shot as BACKHAND
+   UP_ARROW_KEY to mark a shot as SMASH
+
+D_KEY to mark a shot as FOREHAND
+A_KEY to mark a shot as BACKHAND
+W_KEY to mark a shot as SMASH
+
+It is better to hit the key when the player hits the ball.
 """
 
 from argparse import ArgumentParser
@@ -18,22 +28,25 @@ RIGHT_ARROW_KEY = 83
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(
-        description="Annotate a video and write a csv file containing tennis shots"
-    )
+    parser = ArgumentParser(description="Annotate a video and write a csv file containing padel shots")
     parser.add_argument("video")
+    parser.add_argument("--single_player", 
+                        action="store_const", 
+                        default=False, 
+                        help="Set to True if you want to annotate a video with a single player (1vs1 match)")
     args = parser.parse_args()
 
     cap = cv2.VideoCapture(args.video)
+    fps = cap.get(cv2.CAP_PROP_FPS)
 
     # Check if camera opened successfully
     if not cap.isOpened():
-        print("Error opening video stream or file")
+        raise IOError("Error opening video stream or file")
 
     df = pd.DataFrame(columns=["Shot", "FrameId"])
 
     FRAME_ID = 0
-
+    single_player = args.single_player
     your_list = []
 
     # Read until video is completed
@@ -44,23 +57,39 @@ if __name__ == "__main__":
             break
 
         cv2.imshow("Frame", frame)
-        k = cv2.waitKey(30)
+        k = cv2.waitKey(int(1000 / fps))
 
-        if k == RIGHT_ARROW_KEY:  # forehand
-            your_list.append({"Shot": "forehand", "FrameId": FRAME_ID})
+        if k == RIGHT_ARROW_KEY:
+            your_list.append({"Shot": "forehand", "FrameId": FRAME_ID, "Player": "one" if single_player else "right"})
             df = pd.DataFrame.from_records(your_list)
-            print("Add forehand")
-        elif k == LEFT_ARROW_KEY:  # backhand
-            your_list.append({"Shot": "backhand", "FrameId": FRAME_ID})
+            print("Forehand" if single_player else "Right player forehand")
+        elif k == LEFT_ARROW_KEY:
+            your_list.append({"Shot": "backhand", "FrameId": FRAME_ID, "Player": "one" if single_player else "right"})
             df = pd.DataFrame.from_records(your_list)
-            print("Add backhand")
-        elif k == UP_ARROW_KEY:  # serve
-            your_list.append({"Shot": "serve", "FrameId": FRAME_ID})
+            print("Backhand" if single_player else "Right player backhand")
+        elif k == UP_ARROW_KEY:
+            your_list.append({"Shot": "smash", "FrameId": FRAME_ID, "Player": "one" if single_player else "right"})
             df = pd.DataFrame.from_records(your_list)
-            print("Add serve")
+            print("Smash" if single_player else "Right player smash")
+        # elif k == DOWN_ARROW_KEY:  # lob
+        #     your_list.append({"Shot": "lob", "FrameId": FRAME_ID, "Player": "right" if single_player else "one"})
+        #     df = pd.DataFrame.from_records(your_list)
+        #     print("Add lob")
 
-        # Press Q on keyboard to  exit
-        if k == 27:
+        elif k == ord("d"):
+            your_list.append({"Shot": "forehand", "FrameId": FRAME_ID, "Player": "one" if single_player else "left"})
+            df = pd.DataFrame.from_records(your_list)
+            print("Forehand" if single_player else "Left player forehand")
+        elif k == ord("a"):
+            your_list.append({"Shot": "backhand", "FrameId": FRAME_ID, "Player": "one" if single_player else "left"})
+            df = pd.DataFrame.from_records(your_list)
+            print("Backhand" if single_player else "Left player backhand")
+        elif k == ord("w"):
+            your_list.append({"Shot": "smash", "FrameId": FRAME_ID, "Player": "one" if single_player else "left"})
+            df = pd.DataFrame.from_records(your_list)
+            print("Smash" if single_player else "Left player smash")
+
+        if k == 27 or k == ord("q"):  # ESC or 'q' to quit
             break
 
         FRAME_ID += 1
