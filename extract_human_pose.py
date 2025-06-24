@@ -18,14 +18,23 @@ class RoI:
     movenet neural network.
     """
 
-    def __init__(self, shape):
+    def __init__(self, shape, side=None, verbose=False):
+        self.side = side
         self.frame_width = shape[1]
         self.frame_height = shape[0]
-        self.width = self.frame_width
+        self.width = self.frame_width if side is None else self.frame_width // 2
         self.height = self.frame_height
-        self.center_x = shape[1] // 2
+        if side is None:
+            self.center_x = shape[1] // 2
+        elif side == "left":
+            self.center_x = shape[1] // 4 
+        elif side == "right":
+            self.center_x = shape[1] * 3 // 4
+        else:
+            raise ValueError(f"Unknown side: {side}")
         self.center_y = shape[0] // 2
         self.valid = False
+        self.verbose = verbose
 
     def extract_subframe(self, frame):
         """Extract the RoI from the original frame"""
@@ -70,9 +79,8 @@ class RoI:
 
         prob_mean = np.mean(keypoints_pixels[keypoints_pixels[:, 2] != 0][:, 2])
         if self.width != self.frame_width and prob_mean < 0.3:
-            print(
-                f"Lost player track --> reset ROI because prob is too low = {prob_mean}"
-            )
+            if self.verbose:
+                print(f"Lost player track --> reset ROI because prob is too low = {prob_mean}")
             self.reset()
             return
 
@@ -80,13 +88,16 @@ class RoI:
         self.width = int((max_x - min_x) * 1.3)
         self.height = int((max_y - min_y) * 1.3)
 
-        if self.height < 150 or self.width < 10:
-            print(
-                f"Lost player track --> reset ROI because height = {self.height} "
-                f"and width = {self.width}"
-            )
+        if self.height < 70:
+            if self.verbose:
+                print(f"Reset ROI because height = {self.height}")
             self.reset()
             return
+        # if self.width < 10:
+        #     if self.verbose:
+        #         print(f"Lost player track --> reset ROI because width = {self.width}")
+        #     self.reset()
+        #     return
 
         self.width = max(self.width, self.height)
         self.height = max(self.width, self.height)
@@ -102,6 +113,17 @@ class RoI:
 
         if 0 > self.center_y - self.height // 2:
             self.center_y = self.height // 2 + 1
+
+        if self.side == 'right' and self.center_x < self.frame_width / 2:
+            self.reset()
+            if self.verbose:
+                print("Right RoI is on the left side")
+            return
+        elif self.side == 'left' and self.center_x > self.frame_width / 2:
+            self.reset()
+            if self.verbose:
+                print("Left RoI is on the right side")
+            return
 
         # Reset if Out of Bound
         if self.center_x + self.width // 2 >= self.frame_width:
@@ -125,9 +147,15 @@ class RoI:
         """
         Reset the RoI with width/height corresponding to the whole image
         """
-        self.width = self.frame_width
+        self.width = self.frame_width if self.side is None else self.frame_width // 2
         self.height = self.frame_height
-        self.center_x = self.frame_width // 2
+        if self.side is None:
+            self.center_x = self.frame_width // 2
+        elif self.side == "left":
+            self.center_x = self.frame_width // 4
+        elif self.side == "right":
+            self.center_x = self.frame_width * 3 // 4
+
         self.center_y = self.frame_height // 2
 
         self.valid = False
@@ -194,12 +222,12 @@ class HumanPoseExtractor:
         "right_ankle": 16,
     }
 
-    def __init__(self, shape):
+    def __init__(self, shape, side=None, verbose=False):
         # Initialize the TFLite interpreter
         self.interpreter = tf.lite.Interpreter(model_path="movenet.tflite")
         self.interpreter.allocate_tensors()
 
-        self.roi = RoI(shape)
+        self.roi = RoI(shape, side, verbose)
 
     def extract(self, frame):
         """Run inference model on subframe"""
@@ -244,14 +272,14 @@ class HumanPoseExtractor:
 
         return subframe
 
-    def draw_results_frame(self, frame):
+    def draw_results_frame(self, frame, roi_color=(0, 255, 255)):
         """Draw key points and eges on frame"""
         if not self.roi.valid:
             return
 
         draw_edges(frame, self.keypoints_pixels_frame, self.EDGES, 0.01)
         draw_keypoints(frame, self.keypoints_pixels_frame, 0.01)
-        draw_roi(self.roi, frame)
+        draw_roi(self.roi, frame, roi_color)
 
 
 def draw_keypoints(frame, shaped, confidence_threshold):
@@ -278,34 +306,34 @@ def draw_edges(frame, shaped, edges, confidence_threshold):
             )
 
 
-def draw_roi(roi, frame):
+def draw_roi(roi, frame, color=(0, 255, 0)):
     """Draw RoI with a yellow square"""
     cv2.line(
         frame,
         (roi.center_x - roi.width // 2, roi.center_y - roi.height // 2),
         (roi.center_x - roi.width // 2, roi.center_y + roi.height // 2),
-        (0, 255, 255),
+        color,
         3,
     )
     cv2.line(
         frame,
         (roi.center_x + roi.width // 2, roi.center_y + roi.height // 2),
         (roi.center_x - roi.width // 2, roi.center_y + roi.height // 2),
-        (0, 255, 255),
+        color,
         3,
     )
     cv2.line(
         frame,
         (roi.center_x + roi.width // 2, roi.center_y + roi.height // 2),
         (roi.center_x + roi.width // 2, roi.center_y - roi.height // 2),
-        (0, 255, 255),
+        color,
         3,
     )
     cv2.line(
         frame,
         (roi.center_x - roi.width // 2, roi.center_y - roi.height // 2),
         (roi.center_x + roi.width // 2, roi.center_y - roi.height // 2),
-        (0, 255, 255),
+        color,
         3,
     )
 

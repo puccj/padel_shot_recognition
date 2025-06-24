@@ -3,11 +3,13 @@ Capture shots from annotation as a succession of features into a csv files
 Note that we dont save useless features like eyes and ears positions.
 """
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from pathlib import Path
 import numpy as np
 import cv2
 import pandas as pd
+import os
+from tqdm import tqdm
 
 from extract_human_pose import (
     HumanPoseExtractor,
@@ -43,18 +45,17 @@ columns = [
 ]
 
 
-def draw_shot(frame, shot):
+def draw_shot(frame, shot, side):
     """Draw shot name on frame (user-friendly)"""
     cv2.putText(
         frame,
-        shot,
+        f"{side} {shot}",
         (20, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
         fontScale=0.8,
         color=(0, 165, 255),
         thickness=2,
     )
-    print(f"Capturing {shot}")
 
 
 if __name__ == "__main__":
@@ -64,63 +65,83 @@ if __name__ == "__main__":
     parser.add_argument("video")
     parser.add_argument("annotation")
     parser.add_argument("out")
-    parser.add_argument(
-        "--show",
-        action="store_const",
-        const=True,
-        default=False,
-        help="Show frame",
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_const",
-        const=True,
-        default=False,
-        help="Show sub frame",
-    )
+    parser.add_argument("-s", "--show",  action=BooleanOptionalAction, help='show video frames')
+    # parser.add_argument("-d", "--debug", action=BooleanOptionalAction, help='show sub frame')
+    parser.add_argument("-v", "--verbose", action=BooleanOptionalAction, help='show verbose output')
+
     args = parser.parse_args()
 
     shots = pd.read_csv(args.annotation)
     CURRENT_ROW = 0
 
-    NB_IMAGES = 30
     shots_features = []
 
-    FRAME_ID = 1
+    FRAME_ID = 1    # frame number
     IDX_FOREHAND = 1
     IDX_BACKHAND = 1
     IDX_NEUTRAL = 1
-    IDX_SERVE = 1
+    IDX_SMASH = 1
 
     cap = cv2.VideoCapture(args.video)
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video {args.video}")
 
-    assert cap.isOpened()
+    # NB_IMAGES = 30  # number of images to capture for each shot
+    NB_IMAGES = int(cap.get(cv2.CAP_PROP_FPS))   # 1 second of video
 
     ret, frame = cap.read()
 
-    human_pose_extractor = HumanPoseExtractor(frame.shape)
+    r_human_pose_extractor = HumanPoseExtractor(frame.shape, 'right', args.verbose)
+    l_human_pose_extractor = HumanPoseExtractor(frame.shape, 'left', args.verbose)
+    # model = YOLO("yolov8n.pt")
+
+    os.makedirs(args.out, exist_ok=True)
+
+    frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Progress bar
+    if not args.verbose:
+        pbar = tqdm(total=frames, desc="Progress", unit="frame")
 
     while cap.isOpened():
         ret, frame = cap.read()
 
         if not ret:
             break
+        
+        # bboxes = []
+        # results = model(frame, verbose=False)[0]
+        # for box in results.boxes:
+        #     result = box.xyxy.tolist()[0]
+        #     bboxes.append([int(result[0]), int(result[1]), int(result[2]), int(result[3])])
 
         if CURRENT_ROW >= len(shots):
-            print("Done, no more shots in annotation!")
             break
 
-        human_pose_extractor.extract(frame)
+        r_human_pose_extractor.extract(frame)
+        l_human_pose_extractor.extract(frame)
 
         # dont draw non-significant points/edges by setting probability to 0
-        human_pose_extractor.discard(["left_eye", "right_eye", "left_ear", "right_ear"])
-
-        features = human_pose_extractor.keypoints_with_scores.reshape(17, 3)
+        r_human_pose_extractor.discard(["left_eye", "right_eye", "left_ear", "right_ear"])
+        l_human_pose_extractor.discard(["left_eye", "right_eye", "left_ear", "right_ear"])
 
         if shots.iloc[CURRENT_ROW]["FrameId"] - NB_IMAGES // 2 == FRAME_ID:
             shots_features = []
 
-        if (
+        shot_side = shots.iloc[CURRENT_ROW]["Player"]
+        if shot_side == "right":
+            human_pose_extractor = r_human_pose_extractor
+        elif shot_side == "left":
+            human_pose_extractor = l_human_pose_extractor
+        elif shot_side == "one":
+            # TODO: handle single player. For now, we consider the right player
+            human_pose_extractor = r_human_pose_extractor
+        else:
+            raise ValueError(f"Unknown player side {shot_side}")
+        
+        features = human_pose_extractor.keypoints_with_scores.reshape(17, 3)
+
+        if (    # if current frame is in the range of the current shot
             shots.iloc[CURRENT_ROW]["FrameId"] - NB_IMAGES // 2
             <= FRAME_ID
             <= shots.iloc[CURRENT_ROW]["FrameId"] + NB_IMAGES // 2
@@ -128,7 +149,8 @@ if __name__ == "__main__":
             if np.mean(features[:, 2]) < 0.3:
                 CURRENT_ROW += 1
                 shots_features = []
-                print("Cancel this shot")
+                if args.verbose:
+                    print(f"Cancel {shots.iloc[CURRENT_ROW]['Shot']} shot, as not confident enough pose detected ({np.mean(features[:, 2])})")
                 FRAME_ID += 1
                 continue
 
@@ -136,7 +158,8 @@ if __name__ == "__main__":
 
             shot_class = shots.iloc[CURRENT_ROW]["Shot"]
             shots_features.append(features)
-            draw_shot(frame, shot_class)
+            if args.show:
+                draw_shot(frame, shot_class, shot_side)
 
             if FRAME_ID - NB_IMAGES // 2 + 1 == shots.iloc[CURRENT_ROW]["FrameId"]:
                 # add assert?
@@ -155,20 +178,22 @@ if __name__ == "__main__":
                         f"backhand_{IDX_BACKHAND:03d}.csv"
                     )
                     IDX_BACKHAND += 1
-                elif shot_class == "serve":
-                    outpath = Path(args.out).joinpath(f"serve_{IDX_SERVE:03d}.csv")
-                    IDX_SERVE += 1
+                elif shot_class == "smash":
+                    outpath = Path(args.out).joinpath(
+                        f"smash_{IDX_SMASH:03d}.csv")
+                    IDX_SMASH += 1
 
                 shots_df.to_csv(outpath, index=False)
 
                 assert len(shots_df) == NB_IMAGES
 
-                print(f"saving {shot_class} to {outpath}")
+                if args.verbose:
+                    print(f"saving {shot_class} to {outpath}")
 
                 CURRENT_ROW += 1
                 shots_features = []
 
-        elif (
+        elif (  # if there is enough gap between current and previous shot, take a neutral shot
             shots.iloc[CURRENT_ROW]["FrameId"] - shots.iloc[CURRENT_ROW - 1]["FrameId"]
             > NB_IMAGES
         ):
@@ -184,7 +209,8 @@ if __name__ == "__main__":
 
                 features = features[features[:, 2] > 0][:, 0:2].reshape(1, 13 * 2)
                 shots_features.append(features)
-                draw_shot(frame, "neutral")
+                if args.show:
+                    draw_shot(frame, "neutral", shot_side)
 
                 if FRAME_ID == frame_id_between_shots + NB_IMAGES // 2:
                     shots_df = pd.DataFrame(
@@ -193,23 +219,40 @@ if __name__ == "__main__":
                     )
                     shots_df["shot"] = np.full(NB_IMAGES, "neutral")
                     outpath = Path(args.out).joinpath(f"neutral_{IDX_NEUTRAL:03d}.csv")
-                    print(f"saving neutral to {outpath}")
+                    if args.verbose:
+                        print(f"saving neutral to {outpath}")
                     IDX_NEUTRAL += 1
                     shots_df.to_csv(outpath, index=False)
                     shots_features = []
 
+
         # Display results on original frame
         if args.show:
-            human_pose_extractor.draw_results_frame(frame)
+            r_human_pose_extractor.draw_results_frame(frame, (0, 0, 0))
+            l_human_pose_extractor.draw_results_frame(frame)
+            # for bbox in bboxes:
+            #     cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
+            cv2.putText(frame, f"Frame {FRAME_ID}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             cv2.imshow("Frame", frame)
 
-        human_pose_extractor.roi.update(human_pose_extractor.keypoints_pixels_frame)
 
-        k = cv2.waitKey(1)
-        if k == 27:
+        r_human_pose_extractor.roi.update(r_human_pose_extractor.keypoints_pixels_frame)
+        l_human_pose_extractor.roi.update(l_human_pose_extractor.keypoints_pixels_frame)
+
+        if args.show and cv2.waitKey(0) == 27:
             break
 
         FRAME_ID += 1
 
+        if not args.verbose:
+            pbar.update(1)
+
+    if not args.verbose:    
+        pbar.close()
     cap.release()
     cv2.destroyAllWindows()
+
+    print("Done, no more shots in annotation!")
+    print(f"Extracted {IDX_FOREHAND - 1} forehands, {IDX_BACKHAND - 1} backhands, {IDX_SMASH - 1} smashes and {IDX_NEUTRAL - 1} neutrals")
+    print(f"for a total of {IDX_FOREHAND + IDX_BACKHAND + IDX_SMASH - 3} shots out of {len(shots)}")
+    print(f"If extracted shots are small compared to the total, consider changing the pose detection model or decreasing confidence threshold")

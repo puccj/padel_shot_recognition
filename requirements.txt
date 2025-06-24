@@ -1,0 +1,5 @@
+pandas
+opencv-python
+opencv-contrib-python
+tensorflow[and-cuda]==2.16.1
+imageio
