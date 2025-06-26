@@ -103,6 +103,8 @@ if __name__ == "__main__":
     if not args.verbose:
         pbar = tqdm(total=frames, desc="Progress", unit="frame")
 
+    non_confident_frames = 0    # count consecutive frames with low confidence
+    
     while cap.isOpened():
         ret, frame = cap.read()
 
@@ -148,11 +150,17 @@ if __name__ == "__main__":
             <= shots.iloc[CURRENT_ROW]["FrameId"] + NB_IMAGES // 2
         ):
             if confidence < 0.3:
+                non_confident_frames += 1
+            else:
+                non_confident_frames = 0
+            
+            if non_confident_frames > NB_IMAGES *2/30:  # 2 for 30 fps, 4 for 60 fps
                 if args.verbose:
-                    print(f"Cancel {shots.iloc[CURRENT_ROW]['Shot']} shot, as not confident enough pose detected ({confidence:.2f})")
+                    print(f"Cancel {shots.iloc[CURRENT_ROW]['Shot']} shot, as not confident enough pose detected in {non_confident_frames} consecutive frames")
                 CURRENT_ROW += 1
                 shots_features = []
                 FRAME_ID += 1
+                non_confident_frames = 0
                 continue
 
             features = features[features[:, 2] > 0][:, 0:2].reshape(1, 13 * 2)
@@ -163,12 +171,20 @@ if __name__ == "__main__":
                 draw_shot(frame, shot_class, shot_side)
 
             if FRAME_ID - NB_IMAGES // 2 + 1 == shots.iloc[CURRENT_ROW]["FrameId"]:
-                # add assert?
+                if NB_IMAGES != len(shots_features):    # This will happen if two shots are closer than NB_IMAGES frames
+                    # TODO: handle this case better, for now we just skip the shot
+                    if args.verbose:
+                        print(f"Warning: {NB_IMAGES} images expected for {shot_class} shot, but got {len(shots_features)}")
+                        print(f"Skipping {shot_class} shot")
+                    CURRENT_ROW += 1
+                    shots_features = []
+                    FRAME_ID += 1
+                    continue  # skip this shot if not enough images
                 shots_df = pd.DataFrame(
                     np.concatenate(shots_features, axis=0),
                     columns=columns,
                 )
-                shots_df["shot"] = np.full(NB_IMAGES, shot_class)
+                shots_df["shot"] = np.full(len(shots_df), shot_class)
                 if shot_class == "forehand":
                     outpath = Path(args.out).joinpath(
                         f"forehand_{IDX_FOREHAND:03d}.csv"
@@ -260,6 +276,7 @@ if __name__ == "__main__":
     cv2.destroyAllWindows()
 
     print("Done, no more shots in annotation!")
+    print(f"Extraction saved to {args.out}")
     print(f"Extracted {IDX_FOREHAND - 1} forehands, {IDX_BACKHAND - 1} backhands, {IDX_SMASH - 1} smashes and {IDX_NEUTRAL - 1} neutrals")
     print(f"for a total of {IDX_FOREHAND + IDX_BACKHAND + IDX_SMASH - 3} shots out of {len(shots)} ({100 * (IDX_FOREHAND + IDX_BACKHAND + IDX_SMASH - 3) / len(shots):.2f}%)")
     print(f"If a small percentage of shots is extracted, consider changing the pose detection model or decreasing confidence threshold")

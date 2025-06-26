@@ -34,6 +34,7 @@ if __name__ == "__main__":
                         action="store_const", 
                         default=False, 
                         help="Set to True if you want to annotate a video with a single player (1vs1 match)")
+    parser.add_argument("-s", "--speed", type=float, default=1.0, help="Speed of the video playback (default: 1.0)")
     args = parser.parse_args()
 
     cap = cv2.VideoCapture(args.video)
@@ -57,7 +58,7 @@ if __name__ == "__main__":
             break
 
         cv2.imshow("Frame", frame)
-        k = cv2.waitKey(int(1000 / fps))
+        k = cv2.waitKey(int(1000 / (fps * args.speed))) 
 
         if k == RIGHT_ARROW_KEY:
             your_list.append({"Shot": "forehand", "FrameId": FRAME_ID, "Player": "one" if single_player else "right"})
