@@ -88,7 +88,7 @@ class RoI:
         self.width = int((max_x - min_x) * 1.3)
         self.height = int((max_y - min_y) * 1.3)
 
-        if self.height < 70:
+        if self.height < 90:
             if self.verbose:
                 print(f"Reset ROI because height = {self.height}")
             self.reset()
@@ -272,14 +272,14 @@ class HumanPoseExtractor:
 
         return subframe
 
-    def draw_results_frame(self, frame, roi_color=(0, 255, 255)):
+    def draw_results_frame(self, frame, roi_color=(0, 255, 255), confidence=None):
         """Draw key points and eges on frame"""
         if not self.roi.valid:
             return
 
         draw_edges(frame, self.keypoints_pixels_frame, self.EDGES, 0.01)
         draw_keypoints(frame, self.keypoints_pixels_frame, 0.01)
-        draw_roi(self.roi, frame, roi_color)
+        draw_roi(self.roi, frame, roi_color, confidence)
 
 
 def draw_keypoints(frame, shaped, confidence_threshold):
@@ -306,7 +306,7 @@ def draw_edges(frame, shaped, edges, confidence_threshold):
             )
 
 
-def draw_roi(roi, frame, color=(0, 255, 0)):
+def draw_roi(roi, frame, color=(0, 255, 0), confidence=None):
     """Draw RoI with a yellow square"""
     cv2.line(
         frame,
@@ -336,6 +336,17 @@ def draw_roi(roi, frame, color=(0, 255, 0)):
         color,
         3,
     )
+
+    if confidence:
+        cv2.putText(
+            frame,
+            f"Confidence: {confidence:.2f}",
+            (roi.center_x - roi.width // 2, roi.center_y - roi.height // 2 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=0.8,
+            color=color,
+            thickness=2,
+        )
 
 
 if __name__ == "__main__":

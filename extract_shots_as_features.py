@@ -66,7 +66,7 @@ if __name__ == "__main__":
     parser.add_argument("annotation")
     parser.add_argument("out")
     parser.add_argument("-s", "--show",  action=BooleanOptionalAction, help='show video frames')
-    # parser.add_argument("-d", "--debug", action=BooleanOptionalAction, help='show sub frame')
+    parser.add_argument("-d", "--debug", action=BooleanOptionalAction, help='show frame by frame and wait for key press')
     parser.add_argument("-v", "--verbose", action=BooleanOptionalAction, help='show verbose output')
 
     args = parser.parse_args()
@@ -140,17 +140,18 @@ if __name__ == "__main__":
             raise ValueError(f"Unknown player side {shot_side}")
         
         features = human_pose_extractor.keypoints_with_scores.reshape(17, 3)
+        confidence = np.mean(features[:, 2])
 
         if (    # if current frame is in the range of the current shot
             shots.iloc[CURRENT_ROW]["FrameId"] - NB_IMAGES // 2
             <= FRAME_ID
             <= shots.iloc[CURRENT_ROW]["FrameId"] + NB_IMAGES // 2
         ):
-            if np.mean(features[:, 2]) < 0.3:
+            if confidence < 0.3:
+                if args.verbose:
+                    print(f"Cancel {shots.iloc[CURRENT_ROW]['Shot']} shot, as not confident enough pose detected ({confidence:.2f})")
                 CURRENT_ROW += 1
                 shots_features = []
-                if args.verbose:
-                    print(f"Cancel {shots.iloc[CURRENT_ROW]['Shot']} shot, as not confident enough pose detected ({np.mean(features[:, 2])})")
                 FRAME_ID += 1
                 continue
 
@@ -228,8 +229,8 @@ if __name__ == "__main__":
 
         # Display results on original frame
         if args.show:
-            r_human_pose_extractor.draw_results_frame(frame, (0, 0, 0))
-            l_human_pose_extractor.draw_results_frame(frame)
+            r_human_pose_extractor.draw_results_frame(frame, (0, 0, 0), confidence)
+            l_human_pose_extractor.draw_results_frame(frame, (0,255,255), confidence)
             # for bbox in bboxes:
             #     cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
             cv2.putText(frame, f"Frame {FRAME_ID}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
@@ -239,8 +240,14 @@ if __name__ == "__main__":
         r_human_pose_extractor.roi.update(r_human_pose_extractor.keypoints_pixels_frame)
         l_human_pose_extractor.roi.update(l_human_pose_extractor.keypoints_pixels_frame)
 
-        if args.show and cv2.waitKey(0) == 27:
-            break
+        if args.show:
+            if args.debug:
+                k = cv2.waitKey(0)
+            else:
+                k = cv2.waitKey(1)
+            
+            if k == 27 or k == ord("q"):  # ESC or 'q' to quit
+                break
 
         FRAME_ID += 1
 
@@ -254,5 +261,5 @@ if __name__ == "__main__":
 
     print("Done, no more shots in annotation!")
     print(f"Extracted {IDX_FOREHAND - 1} forehands, {IDX_BACKHAND - 1} backhands, {IDX_SMASH - 1} smashes and {IDX_NEUTRAL - 1} neutrals")
-    print(f"for a total of {IDX_FOREHAND + IDX_BACKHAND + IDX_SMASH - 3} shots out of {len(shots)}")
-    print(f"If extracted shots are small compared to the total, consider changing the pose detection model or decreasing confidence threshold")
+    print(f"for a total of {IDX_FOREHAND + IDX_BACKHAND + IDX_SMASH - 3} shots out of {len(shots)} ({100 * (IDX_FOREHAND + IDX_BACKHAND + IDX_SMASH - 3) / len(shots):.2f}%)")
+    print(f"If a small percentage of shots is extracted, consider changing the pose detection model or decreasing confidence threshold")
