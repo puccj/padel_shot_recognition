@@ -58,7 +58,11 @@ if __name__ == "__main__":
             break
 
         cv2.imshow("Frame", frame)
-        k = cv2.waitKey(int(1000 / (fps * args.speed))) 
+        k = cv2.waitKey(int(1000 / (fps * args.speed)))
+
+        if k == ord(" "):  # Space to pause
+            print("Paused. Press any key to continue...")
+            cv2.waitKey(0)
 
         if k == RIGHT_ARROW_KEY:
             your_list.append({"Shot": "forehand", "FrameId": FRAME_ID, "Player": "one" if single_player else "right"})
@@ -89,6 +93,18 @@ if __name__ == "__main__":
             your_list.append({"Shot": "smash", "FrameId": FRAME_ID, "Player": "one" if single_player else "left"})
             df = pd.DataFrame.from_records(your_list)
             print("Smash" if single_player else "Left player smash")
+        
+        # Jump 10 seconds forward and backward
+        elif k == ord("k"):
+            FRAME_ID += int(fps * 10)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
+            print("Jumped 10 seconds forward")
+        elif k == ord("j"):
+            FRAME_ID -= int(fps * 10)
+            if FRAME_ID < 0:
+                FRAME_ID = 0
+            cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
+            print("Jumped 10 seconds backward")
 
         if k == 27 or k == ord("q"):  # ESC or 'q' to quit
             break
