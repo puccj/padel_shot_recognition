@@ -49,6 +49,7 @@ if __name__ == "__main__":
     FRAME_ID = 0
     single_player = args.single_player
     your_list = []
+    speed = args.speed
 
     # Read until video is completed
     while cap.isOpened():
@@ -57,11 +58,13 @@ if __name__ == "__main__":
         if not ret:
             break
 
+        cv2.putText(frame, f"Frame ID: {FRAME_ID}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         cv2.imshow("Frame", frame)
-        k = cv2.waitKey(int(1000 / (fps * args.speed)))
+        k = cv2.waitKey(int(1000 / (fps * speed)))
 
         if k == ord(" "):  # Space to pause
-            print("Paused. Press any key to continue...")
+            cv2.putText(frame, "Paused. Press any key to continue...", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow("Frame", frame)
             cv2.waitKey(0)
 
         if k == RIGHT_ARROW_KEY:
@@ -105,6 +108,13 @@ if __name__ == "__main__":
                 FRAME_ID = 0
             cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
             print("Jumped 10 seconds backward")
+        elif k == ord("c"):
+            speed += 0.1
+            print(f"Speed increased to {speed}x")
+        elif k == ord("x"):
+            speed = max(0.1, speed - 0.1)
+            print(f"Speed decreased to {speed}x")
+
 
         if k == 27 or k == ord("q"):  # ESC or 'q' to quit
             break
