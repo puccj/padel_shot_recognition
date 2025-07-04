@@ -11,9 +11,7 @@ import pandas as pd
 import os
 from tqdm import tqdm
 
-from extract_human_pose import (
-    HumanPoseExtractor,
-)
+from extract_human_pose import HumanPoseExtractor, draw_pose
 
 columns = [
     "nose_y",
@@ -120,28 +118,25 @@ if __name__ == "__main__":
         if CURRENT_ROW >= len(shots):
             break
 
-        r_human_pose_extractor.extract(frame)
-        l_human_pose_extractor.extract(frame)
-
-        # dont draw non-significant points/edges by setting probability to 0
-        r_human_pose_extractor.discard(["left_eye", "right_eye", "left_ear", "right_ear"])
-        l_human_pose_extractor.discard(["left_eye", "right_eye", "left_ear", "right_ear"])
-
-        if shots.iloc[CURRENT_ROW]["FrameId"] - NB_IMAGES // 2 == FRAME_ID:
-            shots_features = []
-
         shot_side = shots.iloc[CURRENT_ROW]["Player"]
         if shot_side == "right":
             human_pose_extractor = r_human_pose_extractor
+            other_pose_extractor = l_human_pose_extractor
         elif shot_side == "left":
             human_pose_extractor = l_human_pose_extractor
+            other_pose_extractor = r_human_pose_extractor
         elif shot_side == "one":
             # TODO: handle single player. For now, we consider the right player
             human_pose_extractor = r_human_pose_extractor
         else:
             raise ValueError(f"Unknown player side {shot_side}")
+
+        if shots.iloc[CURRENT_ROW]["FrameId"] - NB_IMAGES // 2 == FRAME_ID:
+            shots_features = []
         
-        features = human_pose_extractor.keypoints_with_scores.reshape(17, 3)
+        features = human_pose_extractor.extract(frame).reshape(17, 3)
+        # Calculate the pose in pixels coordinates
+        features_pixels = human_pose_extractor.transform_to_frame_coordinates(features)
         confidence = np.mean(features[:, 2])
 
         if (    # if current frame is in the range of the current shot
@@ -245,16 +240,26 @@ if __name__ == "__main__":
 
         # Display results on original frame
         if args.show:
-            r_human_pose_extractor.draw_results_frame(frame, (0, 0, 0), confidence)
-            l_human_pose_extractor.draw_results_frame(frame, (0,255,255), confidence)
+            # Use this to draw the human pose only if the roi is also drawn (i.e. if it's valid)
+            # if human_pose_extractor.draw_roi(frame, (0, 255, 255), confidence):
+            #     draw_pose(frame, features_pixels, confidence)
+            
+            human_pose_extractor.draw_roi(frame, (0, 255, 255), confidence)
+            draw_pose(frame, features_pixels, confidence)
+
+            # Only if we need to draw it, calculate also the other player's pose and draw it
+            other_features = other_pose_extractor.extract(frame).reshape(17, 3)
+            other_features_pixels = other_pose_extractor.transform_to_frame_coordinates(other_features)
+            other_pose_extractor.draw_roi(frame, (0, 0, 0), confidence)
+            draw_pose(frame, other_features_pixels, confidence)
+            other_pose_extractor.roi.update(other_features_pixels)
+
             # for bbox in bboxes:
             #     cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
             cv2.putText(frame, f"Frame {FRAME_ID}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             cv2.imshow("Frame", frame)
 
-
-        r_human_pose_extractor.roi.update(r_human_pose_extractor.keypoints_pixels_frame)
-        l_human_pose_extractor.roi.update(l_human_pose_extractor.keypoints_pixels_frame)
+        human_pose_extractor.roi.update(features_pixels)
 
         if args.show:
             if args.debug:
