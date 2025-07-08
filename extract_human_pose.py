@@ -224,16 +224,18 @@ KEYPOINT_DICT = {
 }
 
 class HumanPoseExtractor:
-    """Extract human pose from a video frame using the MoveNet model.
-    """
+    """Extract human pose from a video frame using the a pose estimation tflite model."""
 
-    def __init__(self, shape, side=None, verbose=False):
+    def __init__(self, shape, model_path="models/movenet_thunder.tflite", side=None, verbose=False):
         """Initialize the HumanPoseExtractor with the given RoI shape and side.
 
         Parameters
         ----------
         shape : tuple
             The shape of the RoI (height, width, channels) to be used for inference.
+        model_path : str, optional
+            The path to the TFLite model file. Default is "models/movenet_thunder.tflite".
+            This model should be a pre-trained pose estimation tflite model.
         side : str, optional
             The side of the RoI, can be 'left', 'right', or None (default is None).
             If not None, only the left or right half of the frame will be used for inference.
@@ -243,7 +245,7 @@ class HumanPoseExtractor:
         """
 
         # Initialize the TFLite interpreter
-        self.interpreter = tf.lite.Interpreter(model_path="models/movenet_thunder.tflite")
+        self.interpreter = tf.lite.Interpreter(model_path=model_path)
         self.dimensions = self.interpreter.get_input_details()[0]["shape"]
         self.interpreter.allocate_tensors()
 
