@@ -360,6 +360,41 @@ class HumanPoseExtractor:
             )
         return True
 
+def draw_pose(frame, keypoints_pixels_frame, confidence_threshold=0.01):
+    """Draw key points and eges on frame
+    
+    Parameters
+    ----------
+    frame : np.ndarray
+        The original frame on which to draw the results.
+    keypoints_pixels_frame : np.ndarray
+        An array of shape (17, 3) containing the keypoints in pixel coordinates.
+        Each keypoint is represented by (y, x, confidence).
+    confidence_threshold : float, optional
+        The minimum confidence threshold for drawing keypoints and edges.
+        Default is 0.01.
+    """
+
+    # Draw edges
+    for edge, color in EDGES.items():
+        p1, p2 = edge
+        y1, x1, c1 = keypoints_pixels_frame[p1]
+        y2, x2, c2 = keypoints_pixels_frame[p2]
+        if (c1 > confidence_threshold) & (c2 > confidence_threshold):
+            cv2.line(
+                frame,
+                (int(x1), int(y1)),
+                (int(x2), int(y2)),
+                color=COLORS[color],
+                thickness=2,
+            )
+
+    # Draw keypoints
+    for kp in keypoints_pixels_frame:
+        ky, kx, kp_conf = kp
+        if kp_conf > confidence_threshold:
+            cv2.circle(frame, (int(kx), int(ky)), 4, (0, 255, 0), -1)
+
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Display human pose on a video")
