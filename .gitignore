@@ -9,3 +9,4 @@ __pycache__/
 input_videos
 dataset
 test.ipynb
+*.pt

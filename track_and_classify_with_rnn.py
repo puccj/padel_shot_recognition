@@ -13,7 +13,10 @@ import pandas as pd
 from tensorflow import keras
 import cv2
 
-from extract_human_pose import HumanPoseExtractor
+from extract_pose import PoseExtractor
+
+from shot_counter import draw_probs
+# But reimplement ShotCounter a bit differently
 
 physical_devices = tf.config.experimental.list_physical_devices("GPU")
 print(tf.config.experimental.list_physical_devices("GPU"))
@@ -113,121 +116,6 @@ class ShotCounter:
             else (0, 0, 255),
             thickness=2,
         )
-
-
-BAR_WIDTH = 30
-BAR_HEIGHT = 170
-MARGIN_ABOVE_BAR = 30
-SPACE_BETWEEN_BARS = 55
-TEXT_ORIGIN_X = 1075
-BAR_ORIGIN_X = 1070
-
-
-def draw_probs(frame, probs):
-    """Draw vertical bars representing probabilities"""
-
-    cv2.putText(
-        frame,
-        "S",
-        (TEXT_ORIGIN_X, 230),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=1,
-        color=(0, 0, 255),
-        thickness=3,
-    )
-    cv2.putText(
-        frame,
-        "B",
-        (TEXT_ORIGIN_X + SPACE_BETWEEN_BARS, 230),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=1,
-        color=(0, 0, 255),
-        thickness=3,
-    )
-    cv2.putText(
-        frame,
-        "N",
-        (TEXT_ORIGIN_X + SPACE_BETWEEN_BARS * 2, 230),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=1,
-        color=(0, 0, 255),
-        thickness=3,
-    )
-    cv2.putText(
-        frame,
-        "F",
-        (TEXT_ORIGIN_X + SPACE_BETWEEN_BARS * 3, 230),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=1,
-        color=(0, 0, 255),
-        thickness=3,
-    )
-    cv2.rectangle(
-        frame,
-        (
-            BAR_ORIGIN_X,
-            int(BAR_HEIGHT + MARGIN_ABOVE_BAR - BAR_HEIGHT * probs[3]),
-        ),
-        (BAR_ORIGIN_X + BAR_WIDTH, BAR_HEIGHT + MARGIN_ABOVE_BAR),
-        color=(0, 0, 255),
-        thickness=-1,
-    )
-
-    cv2.rectangle(
-        frame,
-        (
-            BAR_ORIGIN_X + SPACE_BETWEEN_BARS,
-            int(BAR_HEIGHT + MARGIN_ABOVE_BAR - BAR_HEIGHT * probs[0]),
-        ),
-        (
-            BAR_ORIGIN_X + SPACE_BETWEEN_BARS + BAR_WIDTH,
-            BAR_HEIGHT + MARGIN_ABOVE_BAR,
-        ),
-        color=(0, 0, 255),
-        thickness=-1,
-    )
-    cv2.rectangle(
-        frame,
-        (
-            BAR_ORIGIN_X + SPACE_BETWEEN_BARS * 2,
-            int(BAR_HEIGHT + MARGIN_ABOVE_BAR - BAR_HEIGHT * probs[2]),
-        ),
-        (
-            BAR_ORIGIN_X + SPACE_BETWEEN_BARS * 2 + BAR_WIDTH,
-            BAR_HEIGHT + MARGIN_ABOVE_BAR,
-        ),
-        color=(0, 0, 255),
-        thickness=-1,
-    )
-    cv2.rectangle(
-        frame,
-        (
-            BAR_ORIGIN_X + SPACE_BETWEEN_BARS * 3,
-            int(BAR_HEIGHT + MARGIN_ABOVE_BAR - BAR_HEIGHT * probs[1]),
-        ),
-        (
-            BAR_ORIGIN_X + SPACE_BETWEEN_BARS * 3 + BAR_WIDTH,
-            BAR_HEIGHT + MARGIN_ABOVE_BAR,
-        ),
-        color=(0, 0, 255),
-        thickness=-1,
-    )
-    for i in range(4):
-        cv2.rectangle(
-            frame,
-            (
-                BAR_ORIGIN_X + SPACE_BETWEEN_BARS * i,
-                int(MARGIN_ABOVE_BAR),
-            ),
-            (
-                BAR_ORIGIN_X + SPACE_BETWEEN_BARS * i + BAR_WIDTH,
-                BAR_HEIGHT + MARGIN_ABOVE_BAR,
-            ),
-            color=(255, 255, 255),
-            thickness=1,
-        )
-
-    return frame
 
 
 class GT:
@@ -391,7 +279,7 @@ if __name__ == "__main__":
 
     ret, frame = cap.read()
 
-    human_pose_extractor = HumanPoseExtractor(frame.shape)
+    human_pose_extractor = PoseExtractor(frame.shape)
 
     NB_IMAGES = 30
 

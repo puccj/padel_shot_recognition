@@ -11,7 +11,7 @@ import pandas as pd
 import os
 from tqdm import tqdm
 
-from extract_human_pose import HumanPoseExtractor, draw_pose
+from extract_pose import PoseExtractor, draw_pose
 
 columns = [
     "nose_y",
@@ -57,9 +57,7 @@ def draw_shot(frame, shot, side):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(
-        description="Annotate (associate human pose to a tennis shot)"
-    )
+    parser = ArgumentParser(description="Annotate (associate human pose to a padel shot)")
     parser.add_argument("video")
     parser.add_argument("annotation")
     parser.add_argument("out")
@@ -89,8 +87,8 @@ if __name__ == "__main__":
 
     ret, frame = cap.read()
 
-    r_human_pose_extractor = HumanPoseExtractor(frame.shape, 'right', args.verbose)
-    l_human_pose_extractor = HumanPoseExtractor(frame.shape, 'left', args.verbose)
+    r_human_pose_extractor = PoseExtractor(frame.shape, 'right', args.verbose)
+    l_human_pose_extractor = PoseExtractor(frame.shape, 'left', args.verbose)
     # model = YOLO("yolov8n.pt")
 
     os.makedirs(args.out, exist_ok=True)

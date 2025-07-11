@@ -14,115 +14,14 @@ import pandas as pd
 from tensorflow import keras
 from tqdm import tqdm
 
-from extract_human_pose import HumanPoseExtractor, draw_pose
+from extract_pose import PoseExtractor, draw_pose
 # from track_and_classify_with_rnn import GT, draw_probs
-from track_and_classify_with_rnn import draw_probs
+from shot_counter import ShotCounter, draw_probs
 
-physical_devices = tf.config.experimental.list_physical_devices("GPU")
-print(tf.config.experimental.list_physical_devices("GPU"))
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
-print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices("GPU")))
-
-
-class ShotCounter:
-    """Basic shot counter with a shot history"""
-
-    BAR_WIDTH = 30
-    BAR_HEIGHT = 170
-    MARGIN_ABOVE_BAR = 30
-    SPACE_BETWEEN_BARS = 55
-    TEXT_ORIGIN_X = 1075
-    BAR_ORIGIN_X = 1070
-
-    def __init__(self, fps=60):
-        self.nb_history = int(fps/2) # half a second history
-        self.probs = np.zeros((self.nb_history, 4))
-
-        self.nb_forehands = 0
-        self.nb_backhands = 0
-        self.nb_smashes = 0
-
-        self.last_shot = "neutral"
-        self.min_frames_between_shots = int(fps*2)  # 2 seconds between shots
-        self.frames_since_last_shot = int(fps*2)  # TODO: maybe better to start with 0 (i.e. no shot for the first 2 seconds) ?
-
-        self.results = []
-
-    def update(self, probs, frame_id):
-        """
-        Update current state with new shots probabilities
-        If one of the probability is over 50%, it can be considered as reliable
-        We need at least min_frames_between_shots frames between two shots (backhand/forehand/smash)
-        Between each shot, we should normally go through a "neutral state" meaning that the player
-        is not currently hitting the ball
-        """
-
-        self.probs[0 : self.nb_history - 1, :] = self.probs[1:, :].copy()
-        self.probs[-1, :] = probs
-
-        self.frames_since_last_shot += 1
-
-        means = np.mean(self.probs, axis=0)
-        if means[0] > 0.5:          # backhand currently
-            if (self.last_shot == "neutral"
-                and self.frames_since_last_shot > self.min_frames_between_shots
-            ):
-                self.nb_backhands += 1
-                self.last_shot = "backhand"
-                self.frames_since_last_shot = 0
-                self.results.append({"FrameID": frame_id, "Shot": self.last_shot})
-        elif means[1] > 0.5:        # forehand currently
-            if (self.last_shot == "neutral"
-                and self.frames_since_last_shot > self.min_frames_between_shots
-            ):
-                self.nb_forehands += 1
-                self.last_shot = "forehand"
-                self.frames_since_last_shot = 0
-                self.results.append({"FrameID": frame_id, "Shot": self.last_shot})
-        elif means[2] > 0.5:        # neutral currently
-            self.last_shot = "neutral"
-        elif means[3] > 0.5:        # smash currently
-            if (self.last_shot == "neutral"
-                and self.frames_since_last_shot > self.min_frames_between_shots
-            ):
-                self.nb_smashes += 1
-                self.last_shot = "smash"
-                self.frames_since_last_shot = 0
-                self.results.append({"FrameID": frame_id, "Shot": self.last_shot})
-
-    def display(self, frame):
-        """
-        Display shot count
-        Colorize last shot in green
-        """
-
-        cv2.putText(
-            frame,
-            f"Backhands = {self.nb_backhands}",
-            (20, frame.shape[0] - 100),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1,
-            color= (0, 255, 0) if (self.last_shot == "backhand" and self.frames_since_last_shot < 30) else (0, 0, 255),
-            thickness=2,
-        )
-        cv2.putText(
-            frame,
-            f"Forehands = {self.nb_forehands}",
-            (20, frame.shape[0] - 60),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1,
-            color= (0, 255, 0) if (self.last_shot == "forehand" and self.frames_since_last_shot < 30) else (0, 0, 255),
-            thickness=2,
-        )
-        cv2.putText(
-            frame,
-            f"Smashes = {self.nb_smashes}",
-            (20, frame.shape[0] - 20),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1,
-            color= (0, 255, 0) if (self.last_shot == "smash" and self.frames_since_last_shot < 30) else (0, 0, 255),
-            thickness=2,
-        )
+# physical_devices = tf.config.experimental.list_physical_devices("GPU")
+# print(tf.config.experimental.list_physical_devices("GPU"))
+# tf.config.experimental.set_memory_growth(physical_devices[0], True)
+# print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices("GPU")))
 
 
 def compute_recall_precision(gt, shots):
@@ -200,7 +99,7 @@ if __name__ == "__main__":
     if not args.show:
         pbar = tqdm(total=int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), desc="Processing", unit="frame")
 
-    human_pose_extractor = HumanPoseExtractor(frame.shape)
+    human_pose_extractor = PoseExtractor(frame.shape)
     shot_counter = ShotCounter(fps)
     FRAME_ID = 0
 
@@ -230,8 +129,7 @@ if __name__ == "__main__":
         # if args.evaluate is not None:
         #     gt.display(frame, FRAME_ID)
         
-        if (
-            shot_counter.frames_since_last_shot < 30
+        if (shot_counter.frames_since_last_shot < 30
             and shot_counter.last_shot != "neutral"
         ):
             human_pose_extractor.roi.draw_shot(frame, shot_counter.last_shot)
