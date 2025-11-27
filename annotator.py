@@ -38,7 +38,7 @@ M to JUMP 10 seconds FORWARD
 N to JUMP 10 seconds BACKWARD
 B to INCREASE playback SPEED
 V to DECREASE playback SPEED
-ESC or Q to QUIT the annotation
+ESC  to QUIT the annotation
 
 DELETE to REMOVE the last annotated shot
 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
             speed = max(0.1, speed - 0.1)
             print(f"Speed decreased to {speed}x")
 
-        elif k == 27 or k == ord("q"):  # ESC or 'q' to quit
+        elif k == 27:  # ESC or 'q' to quit
             break
 
         FRAME_ID += 1
