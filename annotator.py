@@ -84,6 +84,8 @@ if __name__ == "__main__":
             break
 
         cv2.putText(frame, f"Frame ID: {FRAME_ID}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, f"Speed: {speed:.1f}x", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(frame, f"Current side: {side}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.imshow("Frame", frame)
         k = cv2.waitKey(int(1000 / (fps * speed)))
 
@@ -191,8 +193,16 @@ if __name__ == "__main__":
             speed = max(0.1, speed - 0.1)
             print(f"Speed decreased to {speed}x")
 
-        elif k == 27:  # ESC or 'q' to quit
+        elif k == 27:  # ESC to quit
             break
+
+        elif k == DELETE_KEY:  # DELETE to remove last annotation
+            if shot_list:
+                removed_shot = shot_list.pop()
+                df = pd.DataFrame.from_records(shot_list)
+                print(f"Removed last annotation: {removed_shot}")
+            else:
+                print("No annotations to remove.")
 
         FRAME_ID += 1
 
