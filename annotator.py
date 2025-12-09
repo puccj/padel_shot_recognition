@@ -8,8 +8,10 @@ In particular:
 
 RIGHT_ARROW_KEY to change the side of shot to right
  LEFT_ARROW_KEY to change the side of shot to left
-   UP_ARROW_KEY to select that only one player is present (1vs1 match)
+   UP_ARROW_KEY to chenge the location of the shot to top       (used if two players are in the same side)
+ DOWN_ARROW_KEY to change the location of the shot to bottom    (used if two players are in the same side)
 
+ENTER_KEY to mark a shot as SERVE
 D to mark a shot as FOREHAND
 A to mark a shot as BACKHAND
 Q to mark a shot as FLAT SMASH
@@ -35,7 +37,9 @@ H to mark a shot as RULLO TO THE MESH
 
 SPACE to PAUSE the video
 M to JUMP 10 seconds FORWARD
-N to JUMP 10 seconds BACKWARD
+N to JUMP 5 seconds BACKWARD
+. to JUMP 1 frame FORWARD  (while PAUSED)
+, to JUMP 1 frame BACKWARD (while PAUSED)
 B to INCREASE playback SPEED
 V to DECREASE playback SPEED
 ESC  to QUIT the annotation
@@ -53,8 +57,10 @@ import cv2
 LEFT_ARROW_KEY = 81
 UP_ARROW_KEY = 82
 RIGHT_ARROW_KEY = 83
+DOWN_ARROW_KEY = 84
 DELETE_KEY = 255
-LEFT_ALT_KEY = 130
+LEFT_ALT_KEY = 233
+ENTER_KEY = 13
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Annotate a video and write a csv file containing padel shots")
@@ -91,14 +97,17 @@ if __name__ == "__main__":
 
         if k == LEFT_ARROW_KEY:
             side = "left"
-            print("Switched to left player")
         elif k == RIGHT_ARROW_KEY:
             side = "right"
-            print("Switched to right player")
         elif k == UP_ARROW_KEY:
-            side = "one"
-            print("Single player mode")
+            side = "top"
+        elif k == DOWN_ARROW_KEY:
+            side = "bottom"
 
+        elif k == ENTER_KEY:
+            shot_list.append({"Shot": "serve", "FrameId": FRAME_ID, "Player": side})
+            df = pd.DataFrame.from_records(shot_list)
+            print(f"{side.capitalize()} player serve")
         elif k == ord("d"):
             shot_list.append({"Shot": "forehand", "FrameId": FRAME_ID, "Player": side})
             df = pd.DataFrame.from_records(shot_list)
@@ -173,25 +182,54 @@ if __name__ == "__main__":
             print(f"{side.capitalize()} player rullo to the mesh")
         
         elif k == ord(" "):  # Space to pause
-            cv2.putText(frame, "Paused. Press any key to continue...", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, "Paused. Press Space to continue...", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             cv2.imshow("Frame", frame)
-            cv2.waitKey(0)
+            pause_key = cv2.waitKey(0)
+            while pause_key != ord(" "):
+                if pause_key == ord("."):  # . to jump 1 frame forward
+                    pass
+                elif pause_key == ord(","):  # , to jump 1 frame backward
+                    FRAME_ID -= 2
+                    if FRAME_ID < 0:
+                        FRAME_ID = 0
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
+                elif pause_key == LEFT_ARROW_KEY:
+                    side = "left"
+                elif pause_key == RIGHT_ARROW_KEY:
+                    side = "right"
+                elif pause_key == UP_ARROW_KEY:
+                    side = "top"
+                elif pause_key == DOWN_ARROW_KEY:
+                    side = "bottom"
+                elif pause_key == DELETE_KEY:  # DELETE to remove last annotation
+                    if shot_list:
+                        removed_shot = shot_list.pop()
+                        df = pd.DataFrame.from_records(shot_list)
+                        print(f"Removed last annotation: {removed_shot}")
+                    else:
+                        print("No annotations to remove.")
+                
+                ret, frame = cap.read()
+                FRAME_ID += 1
+                cv2.putText(frame, f"Frame ID: {FRAME_ID}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "Paused. Press Space to continue...", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.putText(frame, f"Speed: {speed:.1f}x", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.putText(frame, f"Current side: {side}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.imshow("Frame", frame)
+                pause_key = cv2.waitKey(0)
+
         elif k == ord("m"):  # M to jump 10 seconds forward
             FRAME_ID += int(fps * 10)
             cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
-            print("Jumped 10 seconds forward")
-        elif k == ord("n"):  # N to jump 10 seconds backward
-            FRAME_ID -= int(fps * 10)
+        elif k == ord("n"):  # N to jump 5 seconds backward
+            FRAME_ID -= int(fps * 5)
             if FRAME_ID < 0:
                 FRAME_ID = 0
             cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
-            print("Jumped 10 seconds backward")
         elif k == ord("b"):  # B to increase speed
             speed += 0.1
-            print(f"Speed increased to {speed}x")
         elif k == ord("v"):  # V to decrease speed
             speed = max(0.1, speed - 0.1)
-            print(f"Speed decreased to {speed}x")
 
         elif k == 27:  # ESC to quit
             break
@@ -203,6 +241,9 @@ if __name__ == "__main__":
                 print(f"Removed last annotation: {removed_shot}")
             else:
                 print("No annotations to remove.")
+
+        elif k != -1:
+            print(f"Unrecognized key: {k}")
 
         FRAME_ID += 1
 
