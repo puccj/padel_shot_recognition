@@ -1,6 +1,6 @@
 """
 This script will produce shot annotation on a padel video.
-It will output a csv file containing frame id, shot name and player who hit.
+It will output a csv file containing frame id, shot name, player who hit and whether the shot was "good" or "bad".
 If there are two players per field, use arrow keys for the left player and WASD keys for the right player. 
 If there is only one player, specify the --single_player flag and use either arrow keys or WASD keys to mark the shots.
 
@@ -32,9 +32,11 @@ O to mark a shot as BANDEJA
 I to mark a shot as VIBORA
 U to mark a shot as BACKHAND VOLLEY
 
-Y to mark a shot as DROP SHOT
+Y to mark a shot as DROP SHOT (dormillona)
 H to mark a shot as RULLO TO THE MESH
 
+CAPS_LOCK to TOGGLE between "good" or "bad" shot
+SHIFT to TOGGLE for the last shot
 
 SPACE to PAUSE the video
 M to JUMP 10 seconds FORWARD
@@ -62,6 +64,33 @@ DOWN_ARROW_KEY = 84
 DELETE_KEY = 255
 LEFT_ALT_KEY = 233
 ENTER_KEY = 13
+CAPS_LOCK_KEY = 229
+LEFT_SHIFT_KEY = 225
+
+SHOT_KEYS = {
+    ENTER_KEY: "serve",
+    ord("d"): "forehand",
+    ord("a"): "backhand",
+    ord("q"): "flat_smash",
+    ord("w"): "topspin_smash",
+    ord("e"): "return_smash",
+    ord("s"): "lob",
+    ord("c"): "forehand_wall_exit",
+    ord("z"): "backhand_wall_exit",
+    ord("x"): "bajada",
+    LEFT_ALT_KEY: "wall_lob",
+    ord("l"): "forehand_contrapared",
+    ord("k"): "backhand_contrapared",
+    ord("p"): "forehand_volley",
+    ord("o"): "bandeja",
+    ord("i"): "vibora",
+    ord("u"): "backhand_volley",
+    ord("y"): "drop_shot",
+    ord("h"): "rullo_to_mesh"
+}
+
+SHOT_COLUMNS = ["Shot", "FrameId", "Player", "Good"]
+
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Annotate a video and write a csv file containing padel shots")
@@ -77,16 +106,17 @@ if __name__ == "__main__":
     if not cap.isOpened():
         raise IOError("Error opening video stream or file")
 
-    df = pd.DataFrame(columns=["Shot", "FrameId"])
+    df = pd.DataFrame(columns=SHOT_COLUMNS)
 
     FRAME_ID = args.start
+    cap.set(cv2.CAP_PROP_POS_FRAMES, FRAME_ID)
     shot_list = []
     speed = args.speed
     side = "right"
+    good = True
 
     # Read until video is completed
     while cap.isOpened():
-        # Capture frame-by-frame
         ret, frame = cap.read()
         if not ret:
             break
@@ -94,6 +124,7 @@ if __name__ == "__main__":
         cv2.putText(frame, f"Frame ID: {FRAME_ID}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         cv2.putText(frame, f"Speed: {speed:.1f}x", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(frame, f"Current side: {side}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(frame, f"Shot outcome: {'good' if good else 'bad'}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.imshow("Frame", frame)
         k = cv2.waitKey(int(1000 / (fps * speed)))
 
@@ -105,83 +136,15 @@ if __name__ == "__main__":
             side = "top"
         elif k == DOWN_ARROW_KEY:
             side = "bottom"
+        elif k == CAPS_LOCK_KEY:
+            good = not good
 
-        elif k == ENTER_KEY:
-            shot_list.append({"Shot": "serve", "FrameId": FRAME_ID, "Player": side})
+        elif k in SHOT_KEYS:
+            shot_name = SHOT_KEYS[k]
+            shot_list.append({"Shot": shot_name, "FrameId": FRAME_ID, "Player": side, "Good": good})
             df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player serve")
-        elif k == ord("d"):
-            shot_list.append({"Shot": "forehand", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player forehand")
-        elif k == ord("a"):
-            shot_list.append({"Shot": "backhand", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player backhand")
-        elif k == ord("q"):
-            shot_list.append({"Shot": "flat_smash", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player flat smash")
-        elif k == ord("w"):
-            shot_list.append({"Shot": "topspin_smash", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player topspin smash")
-        elif k == ord("e"):
-            shot_list.append({"Shot": "return_smash", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player return smash")
-        elif k == ord("s"):
-            shot_list.append({"Shot": "lob", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player lob")
-        elif k == ord("c"):
-            shot_list.append({"Shot": "forehand_wall_exit", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player forehand wall exit")
-        elif k == ord("z"):
-            shot_list.append({"Shot": "backhand_wall_exit", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player backhand wall exit")
-        elif k == ord("x"):
-            shot_list.append({"Shot": "bajada", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player bajada")
-        elif k == LEFT_ALT_KEY:
-            shot_list.append({"Shot": "wall_lob", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player wall lob")
-        elif k == ord("l"):
-            shot_list.append({"Shot": "forehand_contrapared", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player forehand contrapared")
-        elif k == ord("k"):
-            shot_list.append({"Shot": "backhand_contrapared", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player backhand contrapared")
-        elif k == ord("p"):
-            shot_list.append({"Shot": "forehand_volley", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player forehand volley")
-        elif k == ord("o"):
-            shot_list.append({"Shot": "bandeja", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player bandeja")
-        elif k == ord("i"):
-            shot_list.append({"Shot": "vibora", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player vibora")
-        elif k == ord("u"):
-            shot_list.append({"Shot": "backhand_volley", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player backhand volley")
-        elif k == ord("y"):
-            shot_list.append({"Shot": "drop_shot", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player drop shot")
-        elif k == ord("h"):
-            shot_list.append({"Shot": "rullo_to_mesh", "FrameId": FRAME_ID, "Player": side})
-            df = pd.DataFrame.from_records(shot_list)
-            print(f"{side.capitalize()} player rullo to the mesh")
+            status = "good" if good else "bad"
+            print(f"[FRAME {FRAME_ID}] {side.capitalize()} player {shot_name} ({status})")
         
         elif k == ord(" "):  # Space to pause
             cv2.putText(frame, "Paused. Press Space to continue...", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
@@ -203,6 +166,8 @@ if __name__ == "__main__":
                     side = "top"
                 elif pause_key == DOWN_ARROW_KEY:
                     side = "bottom"
+                elif pause_key == CAPS_LOCK_KEY:
+                    good = not good
                 elif pause_key == DELETE_KEY:  # DELETE to remove last annotation
                     if shot_list:
                         removed_shot = shot_list.pop()
@@ -210,6 +175,15 @@ if __name__ == "__main__":
                         print(f"Removed last annotation: {removed_shot}")
                     else:
                         print("No annotations to remove.")
+                elif pause_key == LEFT_SHIFT_KEY:  # SHIFT to toggle for the last shot
+                    if shot_list:
+                        shot_list[-1]["Good"] = not shot_list[-1]["Good"]
+                        df = pd.DataFrame.from_records(shot_list)
+                        print(f"Toggled last annotation: {shot_list[-1]}")
+                    else:
+                        print("No annotations to toggle.")
+                elif pause_key != -1 and pause_key != ord(" "):
+                    print(f"Unrecognized key: {pause_key}")
                 
                 ret, frame = cap.read()
                 FRAME_ID += 1
@@ -217,6 +191,7 @@ if __name__ == "__main__":
                 cv2.putText(frame, "Paused. Press Space to continue...", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                 cv2.putText(frame, f"Speed: {speed:.1f}x", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 cv2.putText(frame, f"Current side: {side}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.putText(frame, f"Shot outcome: {'good' if good else 'bad'}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 cv2.imshow("Frame", frame)
                 pause_key = cv2.waitKey(0)
 
@@ -243,6 +218,13 @@ if __name__ == "__main__":
                 print(f"Removed last annotation: {removed_shot}")
             else:
                 print("No annotations to remove.")
+        elif k == LEFT_SHIFT_KEY:  # SHIFT to toggle for the last shot
+            if shot_list:
+                shot_list[-1]["Good"] = not shot_list[-1]["Good"]
+                df = pd.DataFrame.from_records(shot_list)
+                print(f"Toggled last annotation: {shot_list[-1]}")
+            else:
+                print("No annotations to toggle.")
 
         elif k != -1:
             print(f"Unrecognized key: {k}")
