@@ -26,6 +26,7 @@ Left_Alt_KEY to mark a shot as WALL LOB
 
 L to mark a shot as FOREHAND CONTRAPARED
 K to mark a shot as BACKHAND CONTRAPARED
+
 P to mark a shot as FOREHAND VOLLEY
 O to mark a shot as BANDEJA
 I to mark a shot as VIBORA
@@ -65,7 +66,8 @@ ENTER_KEY = 13
 if __name__ == "__main__":
     parser = ArgumentParser(description="Annotate a video and write a csv file containing padel shots")
     parser.add_argument("video")
-    parser.add_argument("-s", "--speed", type=float, default=1.0, help="Speed of the video playback (default: 1.0)")
+    parser.add_argument("-s", "--start", type=int, default=0, help="Start frame")
+    parser.add_argument("--speed", type=float, default=1.0, help="Playback speed")
     args = parser.parse_args()
 
     cap = cv2.VideoCapture(args.video)
@@ -77,7 +79,7 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(columns=["Shot", "FrameId"])
 
-    FRAME_ID = 0
+    FRAME_ID = args.start
     shot_list = []
     speed = args.speed
     side = "right"
